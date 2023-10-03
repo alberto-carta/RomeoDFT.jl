@@ -133,6 +133,7 @@ module searcher
 
     # Options
 
+    - `--mode=<"search">`: the working mode of the searcher 
     - `--verbosity=<0>`: the logging verbosity, higher = more
     - `--sleep-time=<30>`: time in seconds between updates of the searcher
     - `--max-concurrent-trials=<10>`: amount of trials that are submitted/running to the remote at once 
@@ -170,6 +171,7 @@ module searcher
     - `--hp-U-conv-thr=<0.1>`: threshold for self-consistency of U
     """
     @cast function create(name::String, scf_file::Comonicon.Arg.Path;
+                          mode::String = "search",
                           structure_file::Comonicon.Arg.Path = scf_file,
                           primitive::Bool = false,
                           supercell_a::Int = 1,
@@ -207,6 +209,7 @@ module searcher
                           )
                           
         l = setup_search(name, abspath(scf_file.content), abspath(structure_file.content);
+                      mode                   = mode,
                       primitive              = primitive,
                       supercell              = [supercell_a, supercell_b, supercell_c],
                       sleep_time             = sleep_time,

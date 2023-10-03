@@ -89,7 +89,7 @@ function Overseer.update(::RandomTrialGenerator, m::AbstractLedger)
         @error "Something went wrong with the basecase calculation"
         return
     end
-    rand_search_e    = entity(m[RandomSearcher], 1)
+    rand_search_e = entity(m[RandomSearcher], 1)
 
     maxgen = maximum_generation(m)
     n_new = max_new(m)

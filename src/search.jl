@@ -328,6 +328,10 @@ end
 
 ### SEARCHING
 function set_mode!(l::Searcher, mode::Symbol)
+    if mode ∉ MODES
+        mode = :search 
+        @warn "unknown mode, set to search"
+    end
     set_searcher_stages!(l.ledger, mode)
     l.mode = mode
     return l
@@ -523,6 +527,7 @@ This is the backend method used for the `romeo searcher create` from the command
 
 """
 function setup_search(name, scf_file, structure_file = scf_file;
+                      mode="search",
                       nrand = 10,
                       mixing = EulerAngleMixing,
                       γ = 1.0,
@@ -618,7 +623,7 @@ function setup_search(name, scf_file, structure_file = scf_file;
         l[sim_e] = Hybrid()
     end
 
-    set_mode!(l, :search)
+    set_mode!(l, Symbol(mode))
     save(l)
     return l
 end
@@ -738,6 +743,8 @@ function status(io::IO, l::Searcher)
             status = "SEARCHING"
         elseif l.mode == :cleanup
             status = "CLEANUP"
+        elseif l.mode == :random
+            status = "RANDOM SEARCHING"
         else
             status = "UNKNOWN"
         end

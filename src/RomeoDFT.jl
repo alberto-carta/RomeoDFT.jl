@@ -59,6 +59,7 @@ include("Systems/structural.jl")
 include("Systems/electrides.jl")
 include("Systems/hp.jl")
 include("Systems/model.jl")
+const MODES = [:search, :manual, :postprocess, :random, :cleanup]
 include("stages.jl")
 include("orchestrator.jl")
 include("client.jl")

@@ -617,7 +617,7 @@ function Overseer.update(::Stopper, m::AbstractLedger)
         end
         return
     end
-    if m.mode == :manual
+    if m.mode ∈ [:manual, :random]
         return
     end
 

@@ -33,11 +33,15 @@ cleanup_stage() = Stage(:cleanup, [creation_stage(),
                                    postprocessing_stage(),
                                    finalize_stage()])
 
-intersection_stage() = Stage(:intersection, [ModelDataExtractor(), ModelTrainer(), MLTrialGenerator(), RandomTrialGenerator()])
+ml_stage() = Stage(:intersection, [ModelDataExtractor(), ModelTrainer(), MLTrialGenerator(), RandomTrialGenerator()])
+
     
 # firefly_stage() = Stage(:firefly, [FireFly(), PostFireflyExplorer(), Archiver()])
 
-search_stage() = Stage(:main, [core_stage(), intersection_stage()])
+search_stage() = Stage(:main, [core_stage(), ml_stage()])
+
+# for benchmark
+random_only() = Stage(:main, [core_stage(), Stage(:random, [RandomTrialGenerator()])])
 
 function set_searcher_stages!(l::AbstractLedger, s::Symbol)
     if s ∈ (:postprocess, :manual)
@@ -46,6 +50,8 @@ function set_searcher_stages!(l::AbstractLedger, s::Symbol)
         Overseer.ledger(l).stages = [search_stage()]
     elseif s == :cleanup
         Overseer.ledger(l).stages = [cleanup_stage()]
+    elseif s == :random
+        Overseer.ledger(l).stages = [random_only()]
     else
         error("Searcher stage $s not recognized...")
     end
