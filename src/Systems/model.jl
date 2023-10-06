@@ -1,9 +1,10 @@
 using Flux
+using Flux: DataLoader
 using Zygote
 
 const HUBTYPE = Vector{Vector{NamedTuple{(:id, :trace, :eigvals, :eigvecs, :occupations, :magmom), Tuple{Int64, NamedTuple{(:up, :down, :total), Tuple{Float64, Float64, Float64}}, NamedTuple{(:up, :down), Tuple{Vector{Float64}, Vector{Float64}}}, NamedTuple{(:up, :down), Tuple{Matrix{Float64}, Matrix{Float64}}}, NamedTuple{(:up, :down), Tuple{Matrix{Float64}, Matrix{Float64}}}, Float64}}}}
 
-function mlp_single_atom(n_features)
+function mlp_single_atom(n_features, n_output)
     # model = Chain(Dense(n_features, n_features, x -> leakyrelu(x, 0.2)),
     #               Dense(n_features, n_features, x -> leakyrelu(x, 0.2)),
     #               Dense(n_features, n_features, sigmoid))
@@ -20,10 +21,10 @@ function mlp_single_atom(n_features)
     #               Dense(rand(n_features, n_features).-0.5, true, x -> 2 * (sigmoid(x) - 0.5)),
     #               )
     model = Chain(Dense(n_features, n_features, x -> leakyrelu(x, 0.2)),
+                  Dropout(0.2),
                   Dense(n_features, n_features, x -> leakyrelu(x, 0.2)),
-                  # Dense(n_features, n_features, x -> 2 * (sigmoid(x) - 0.5)),
-                  Dense(n_features, n_features, x -> 2 * (sigmoid(x) - 0.5f0)),
-                  )
+                  Dropout(0.2),
+                  Dense(n_features, n_output, x -> 2 * sigmoid(x)-1))
     return model
 end
 
@@ -31,6 +32,13 @@ function mlp_converge(n_features)
     Chain(Dense(n_features, div(n_features, 2), x -> leakyrelu(x, 0.2f0)),
           Dense(div(n_features, 2), div(n_features, 4), sigmoid),
           Dense(div(n_features, 4), 1, sigmoid))
+end
+
+function LinearAlgebra.tr(vm::AbstractVector{RomeoDFT.ColinMatrixType})
+    nels = map(vm) do v
+        [tr(view(v, Up())), tr(view(v, Down()))]
+    end
+    reduce(vcat, nels)
 end
 
 function mat2features(m::RomeoDFT.ColinMatrixType)
@@ -50,29 +58,44 @@ function mat2features(m::RomeoDFT.ColinMatrixType)
     out
 end
 
-function features2mat(v::AbstractVector)
-    n = 0
-    m = 0
-    while 2m < length(v)
-        m += n
-        n += 1
+function mat2features(vm::AbstractVector{RomeoDFT.ColinMatrixType})
+    n::Int = size(vm[1],1)
+    nat::Int = size(vm, 1)
+    features = Vector{Float32}(undef, 2nat + nat * (n*(n+1)))
+    elements = map(vm) do v
+        mat2features(v)
     end
-    n -= 1
-
-    data = zeros(n, 2n)
-
-    c = 1
-    for i = 1:n
-        for j = i:n
-            data[i, j] = data[j,i] = v[c]
-            data[i, j+n] = data[j, i+n] = v[c+m]
-            c+=1
-        end
-    end
-    return RomeoDFT.ColinMatrixType(data)
+    features[1:2nat] = tr(vm)
+    features[2nat+1:end] = reduce(vcat, elements)
+    return features
 end
 
-State(model, s::State) = State([features2mat(model(mat2features(s.occupations[1])))])
+
+function features2mat(v::AbstractVector, nat::Int64)
+    n = div(size(v, 1) - 2nat, nat)
+    n = Int(div(sqrt(4n+1) - 1, 2))
+    m = div(n*(n+1), 2)
+
+    elements = view(v, 2nat+1:length(v))
+    
+    map(0:nat-1) do iat
+        data = zeros(Float32, n, 2n)
+        c = 1 + iat*2m
+        for i = 1:n
+            for j = i:n
+                data[i, j] = data[j,i] = elements[c]
+                data[i, j+n] = data[j, i+n] = elements[c+m]
+                c+=1
+            end
+        end
+        return RomeoDFT.ColinMatrixType(data)
+    end
+end
+
+function State(model, s::State)
+    nat = length(s.occupations)
+    State([features2mat(model(mat2features(s.occupations[1])), nat)])
+end
 
 @component struct ModelData
     x::Matrix{Float32}
@@ -87,29 +110,75 @@ function Overseer.update(::ModelDataExtractor, l::AbstractLedger)
     update_modeldata!(l)
 end
 
+function reverse(occs::AbstractVector{RomeoDFT.ColinMatrixType})
+    map(occs) do o 
+        tmp = similar(o)
+        # TODO hardcoding
+        tmp.data[1:5, 1:5] = o[Down()]
+        tmp.data[1:5, 6:10] = o[Up()]
+        return tmp
+    end
+end
+
 function update_modeldata!(l::AbstractLedger)
     @error_capturing_threaded for e in @entities_in(l, Results && !ModelData)
-        if e.converged 
-            path = joinpath(l, e, "scf.out")
-            out = DFC.FileIO.qe_parse_pw_output(path)
-            
-            if !haskey(out, :Hubbard)
-                continue
-            end
-            hubbard::HUBTYPE = out[:Hubbard]
-            
-            r = get(out, :Hubbard_iterations, 1):length(hubbard)-1
-            last_state = State(hubbard[end])
-            
-            xs = Vector{Vector{Float32}}(undef, length(r))
-            ys = fill(mat2features(last_state.occupations[1]), length(r))
+        path = joinpath(l, e, "scf.out")
+        if !ispath(path)
+            continue
+        end
+        
+        out = DFC.FileIO.qe_parse_pw_output(path)
+        if !haskey(out, :Hubbard)
+            continue
+        end
+        hubbard::HUBTYPE = out[:Hubbard]
+        
+        r = get(out, :Hubbard_iterations, 1):length(hubbard)-1
+        last_state = State(hubbard[end])
+        
+        states = Vector{State}(undef, length(r))
+        Threads.@threads for i in r
+            states[i] = State(hubbard[i])
+        end
 
-            Threads.@threads for i in r
-                xs[i] = mat2features(State(hubbard[i]).occupations[1])
+        good_r = findall(x->minimum(x.eigvals[1]) > -0.01 && maximum(x.eigvals[1]) < 1.01, states)
+        ngr = length(good_r)
+        
+        # augment data by flipping the Up and Down channel
+        xs = Vector{Vector{Float32}}(undef, 2ngr)
+        Threads.@threads for i in 1:ngr
+            xs[i] = mat2features(states[good_r[i]].occupations)
+            xs[i+ngr] = mat2features(reverse(states[good_r[i]].occupations))
+        end
+
+        # filtering only the first half
+        isunique = trues(2ngr)
+        @inbounds for i in 1:ngr
+            if isunique[i]
+                xsi = xs[i]
+                for j = i+1:ngr
+                    if isunique[j]
+                        xsj = xs[j]
+                        isunique[j] = sum(k -> abs(xsi[k] - xsj[k]), 1:length(xsi)) > 0.1
+                    end
+                end
             end
-            #TODO can we just 1 ys ?
-            l[ModelData][e] = ModelData(hcat(xs...), hcat(ys...))
-        end 
+        end
+
+        isunique[ngr+1:end] = isunique[1:ngr]
+        x = xs[isunique]
+        nx = length(x)
+        ys = vcat(fill(mat2features(last_state.occupations), div(nx, 2)),
+            fill(mat2features(reverse(last_state.occupations)), div(nx, 2)))
+        
+        # if e.converged
+        #     ys = fill(mat2features(last_state.occupations), length(x))
+        # else
+        #     # not the most performant
+        #     ys = fill(0.0f0, length(x))
+        # end
+        #TODO can we just 1 ys ?
+        l[ModelData][e] = ModelData(reduce(hcat, x), reduce(hcat, ys))
     end
 end
 
@@ -137,31 +206,49 @@ end
 function train_model(l::Searcher, n_points)
     trainer_settings = l[TrainerSettings][1]
     X, y = prepare_data(l)
-    ndat = size(X, 2)
+    test, train = Flux.splitobs(size(X,2), at=0.1)
+    ndat = size(X[:, train], 2)
+    n_features = size(X, 1)
+    nat = length(l[Results][1].state.occupations)
+    batchsize = 3000
+
+    loader = DataLoader((X[:, train], y[:, train]), batchsize=batchsize, shuffle=true)
     
-    model = mlp_single_atom(size(X, 1))
-    
+    model = mlp_single_atom(n_features, n_features)
     opt_state = Flux.setup(Adam(), model)
     
-    @info "training on batch of size $ndat"
-    train_set = [(X, y)]
+    @info "total training data size $ndat"
+    @info "training on batch size $batchsize"
+
+    train_set = [(X[:, train], y[:, train])]
     train_loss = []
-    loss = Inf
-    i = 1
-    while loss > 1e-3
-        suppress() do
-            Flux.train!(model, train_set, opt_state) do m, x, y
-                loss = Flux.Losses.mse(m(x), y)
+    test_loss = []
+    min_loss = Inf
+    best_state = Flux.state(deepcopy(model))
+    for i in 1:trainer_settings.n_iterations_per_training
+        for (x, _) in loader
+            RomeoDFT.suppress() do
+                Flux.train!(model, train_set, opt_state) do m, x, y
+                    Flux.Losses.mse(m(x), y)
+                end
             end
         end
-        push!(train_loss, loss)
+
+        push!(train_loss, Flux.Losses.mse(model(X[:, train]), y[:, train]))
+        push!(test_loss, Flux.Losses.mse(model(X[:, test]), y[:, test]))
         if i % 100 == 0
-            @debug i, loss
+            @show i, train_loss[end], test_loss[end]
         end
-        i += 1
+        if i > 300 && test_loss[end] < min_loss
+            best_state = Flux.state(deepcopy(model))
+            min_loss = test_loss[end]
+        end
     end
     
-    return Model(n_points, Flux.state(model))
+    # p = plot(train_loss, label="train")
+    # p = plot!(test_loss, label="test")
+    # display(p)
+    return Model(n_points, best_state)
 end
 
 struct ModelTrainer <: System end
@@ -200,7 +287,10 @@ function model(m::AbstractLedger)
     # if no model yet, skip
     model = isempty(m[Model]) ? nothing : m[Model][end]
     model === nothing && return
-    flux_model = mlp_single_atom(30)
+    d = m[ModelData][1]
+    n_features = size(d.x, 1)
+    n_output = size(d.y, 1)
+    flux_model = mlp_single_atom(n_features, n_output)
     Flux.loadmodel!(flux_model, model.model_state)
     return flux_model
 end
@@ -214,13 +304,13 @@ function Overseer.update(::MLTrialGenerator, m::AbstractLedger)
     flux_model === nothing && return
     model_e = last_entity(m[Model])
     
-    unique_states = @entities_in(m, Unique && Results)
-    pending_states = @entities_in(m, Trial && !Results)
+    # unique_states = @entities_in(m, Unique && Results)
+    # pending_states = @entities_in(m, Trial && !Results)
 
     n_new = 0
     max_tries = m[MLTrialSettings][1].n_tries
     dist_thr  = m[MLTrialSettings][1].minimum_distance
-    
+    last_max_dist = 0 
     while max_new(m) > 0
         max_dist = 0
         new_s = nothing
@@ -266,11 +356,12 @@ function Overseer.update(::MLTrialGenerator, m::AbstractLedger)
         new_e = add_search_entity!(m, model_e, trial, m[Generation][model_e])
         m[Model][new_e] = model_e
         n_new += 1
+        last_max_dist = max_dist
     end
     if n_new != 0
         @debug "$n_new new ML trials at Generation($(m[Generation][model_e].generation))" 
     elseif max_new(m) > 0 
-        @debug "Max reached, max dist = $max_dist"
+        @debug "Max reached, max dist = $last_max_dist"
     end
 end
 
@@ -288,6 +379,7 @@ function Overseer.update(::MLIntersector, m::AbstractLedger)
     
     unique_states = collect(@entities_in(m, Unique && Results))
     pending_states = collect(@entities_in(m, Trial && !Results))
+    nat = length(unique_states[1].state.occupations)
 
     max_dist = 0
     n_new = max_new(m)
@@ -319,7 +411,7 @@ function Overseer.update(::MLIntersector, m::AbstractLedger)
                     break
                 end
                 tstate = α * e1.state + (1-α) * e2.state
-                tstate = State([features2mat(flux_model(mat2features(tstate.occupations[1])))])
+                tstate = State([features2mat(flux_model(mat2features(tstate.occupations[1])), nat)])
                 
                 dist, minid   = isempty(unique_states) ? (Inf, 0) : findmin(x -> Euclidean()(x.state, tstate), unique_states)
                 dist2, minid2 = isempty(pending_states) ? (Inf, 0) : findmin(x -> Euclidean()(x.state, tstate), pending_states)
