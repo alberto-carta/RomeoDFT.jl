@@ -19,12 +19,18 @@ function mlp_single_atom(n_features)
     #               # Dense(n_features, n_features, x -> 2 * (sigmoid(x) - 0.5)),
     #               Dense(rand(n_features, n_features).-0.5, true, x -> 2 * (sigmoid(x) - 0.5)),
     #               )
-    model = Chain(Dense(n_features, n_features, x -> 2 * (sigmoid(x) - 0.5f0)),
-                  Dense(n_features, n_features, x -> 2 * (sigmoid(x) - 0.5f0)),
+    model = Chain(Dense(n_features, n_features, x -> leakyrelu(x, 0.2)),
+                  Dense(n_features, n_features, x -> leakyrelu(x, 0.2)),
                   # Dense(n_features, n_features, x -> 2 * (sigmoid(x) - 0.5)),
                   Dense(n_features, n_features, x -> 2 * (sigmoid(x) - 0.5f0)),
                   )
     return model
+end
+
+function mlp_converge(n_features)
+    Chain(Dense(n_features, div(n_features, 2), x -> leakyrelu(x, 0.2f0)),
+          Dense(div(n_features, 2), div(n_features, 4), sigmoid),
+          Dense(div(n_features, 4), 1, sigmoid))
 end
 
 function mat2features(m::RomeoDFT.ColinMatrixType)
@@ -78,6 +84,10 @@ struct ModelDataExtractor <: System end
 Overseer.requested_components(::ModelDataExtractor) = (ModelData, Results)
 
 function Overseer.update(::ModelDataExtractor, l::AbstractLedger)
+    update_modeldata!(l)
+end
+
+function update_modeldata!(l::AbstractLedger)
     @error_capturing_threaded for e in @entities_in(l, Results && !ModelData)
         if e.converged 
             path = joinpath(l, e, "scf.out")
