@@ -24,7 +24,7 @@ function mlp_single_atom(n_features, n_output)
                   Dropout(0.2),
                   Dense(n_features, n_features, x -> leakyrelu(x, 0.2)),
                   Dropout(0.2),
-                  Dense(n_features, n_output, x -> 2 * sigmoid(x)-1))
+                  Dense(n_features, n_output))
     return model
 end
 
@@ -94,7 +94,7 @@ end
 
 function State(model, s::State)
     nat = length(s.occupations)
-    State([features2mat(model(mat2features(s.occupations[1])), nat)])
+    State(features2mat(model(mat2features(s.occupations)), nat))
 end
 
 @component struct ModelData
@@ -203,6 +203,17 @@ end
     model_state
 end
 
+struct ModelTrainer <: System end
+function Overseer.requested_components(::ModelTrainer)
+    return (TrainerSettings, Intersection, Model)
+end
+
+@views function model_loss(y, yhat, nat)
+    l1 = Flux.Losses.mse(y[1:2nat, :], yhat[1:2nat, :])
+    l2 = Flux.Losses.mse(tanh.(y[2nat+1:end, :]), tanh.(yhat[2nat+1:end, :]))
+    return l1 + l2
+end
+
 function train_model(l::Searcher, n_points)
     trainer_settings = l[TrainerSettings][1]
     X, y = prepare_data(l)
@@ -229,7 +240,7 @@ function train_model(l::Searcher, n_points)
         for (x, _) in loader
             RomeoDFT.suppress() do
                 Flux.train!(model, train_set, opt_state) do m, x, y
-                    Flux.Losses.mse(m(x), y)
+                    model_loss(m(x), y, nat)
                 end
             end
         end
@@ -244,16 +255,12 @@ function train_model(l::Searcher, n_points)
             min_loss = test_loss[end]
         end
     end
+    @info min_loss
     
     # p = plot(train_loss, label="train")
     # p = plot!(test_loss, label="test")
     # display(p)
     return Model(n_points, best_state)
-end
-
-struct ModelTrainer <: System end
-function Overseer.requested_components(::ModelTrainer)
-    return (TrainerSettings, Intersection, Model)
 end
 
 function Overseer.update(::ModelTrainer, m::AbstractLedger)
