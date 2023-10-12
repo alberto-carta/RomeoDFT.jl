@@ -203,6 +203,26 @@ end
     model_state
 end
 
+
+function model_summary(l::AbstractLedger)
+    isempty(l[Model]) && return nothing
+    n_model = length(l[Model])
+    data = Matrix{String}(undef, n_model, 3)
+    X, y = prepare_data(l)
+    nat = length(l[Results][1].state.occupations)
+    for i in 1:n_model
+        data[i, 1] = string(i)
+        data[i, 2] = string(l[Model][i].n_points)
+        m = model(l, i)
+        loss = model_loss(m(X), y, nat)
+        data[i, 3] = string(loss)
+    end
+    to_text = sprint() do io
+        pretty_table(io, data, header = ["Version", "Training Size", "Loss"])
+    end
+    return Text(to_text)
+end
+
 struct ModelTrainer <: System end
 function Overseer.requested_components(::ModelTrainer)
     return (TrainerSettings, Intersection, Model)
@@ -214,7 +234,7 @@ end
     return l1 + l2
 end
 
-function train_model(l::Searcher, n_points)
+function train_model(l::AbstractLedger, n_points)
     trainer_settings = l[TrainerSettings][1]
     X, y = prepare_data(l)
     test, train = Flux.splitobs(size(X,2), at=0.1)
@@ -290,9 +310,9 @@ function Overseer.requested_components(::MLTrialGenerator)
     return (MLTrialSettings, Model, SearcherInfo)
 end
 
-function model(m::AbstractLedger)
+function model(m::AbstractLedger, i=length(m[Model]))
     # if no model yet, skip
-    model = isempty(m[Model]) ? nothing : m[Model][end]
+    model = isempty(m[Model]) ? nothing : m[Model][i]
     model === nothing && return
     d = m[ModelData][1]
     n_features = size(d.x, 1)
@@ -303,11 +323,13 @@ function model(m::AbstractLedger)
 end
 
 function Overseer.update(::MLTrialGenerator, m::AbstractLedger)
-    # if no model yet, skip
-    flux_model = model(m)
+    # TODO: start condition should be after heuristic phase
+    # this is something that could be addressed by a higher level system
     if length(m[Results]) < 10
         return
     end
+    # if no model yet, skip
+    flux_model = model(m)
     flux_model === nothing && return
     model_e = last_entity(m[Model])
     

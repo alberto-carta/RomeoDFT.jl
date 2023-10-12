@@ -754,6 +754,10 @@ function status(io::IO, l::Searcher)
     println(io, "Total Trials:         $(length(@entities_in(l, Results && !Parents))),$(length(filter(x->!x.converged, @entities_in(l, Results && !Parents)))) non-converged")
     println(io, "Total scf iterations: $(sum(x->x.niterations, l[Results], init=0))")
 
+    if !(l.mode == :random || isempty(l[Model]))
+        println(io, model_summary(l))
+    end
+
     println(io)
     write_groundstate(io, l)
     plot_states(io, l)
