@@ -75,9 +75,18 @@ function rand_trial(n_orb_per_at::Vector, n_elec_per_at::Vector)
 end
 
 function Overseer.update(::RandomTrialGenerator, m::AbstractLedger)
+    # should we throw error if either is empty?
     if isempty(m[RandomSearcher]) || isempty(m[BaseCase])
         return
     end
+
+    # check if there is still random search budget
+    random_search = singleton(m, RandomSearcher)
+    n_random = length(filter(e->e.origin==RandomMixed, m[Trial]))
+    if n_random >= random_search.nsearchers
+        return
+    end
+
     # First make sure the base case calculation is finished
     base_e = entity(m[BaseCase], 1)
     if isempty(m[BaseCase]) || !all_children_done(m, base_e) || base_e ∉ m[Results]
@@ -86,7 +95,7 @@ function Overseer.update(::RandomTrialGenerator, m::AbstractLedger)
     
     base_state = m[Results][base_e].state
     if isempty(base_state.occupations)
-        @error "Something went wrong with the basecase calculation"
+        @error "Something went wrong with the base case calculation"
         return
     end
     rand_search_e = entity(m[RandomSearcher], 1)

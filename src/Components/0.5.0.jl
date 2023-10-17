@@ -121,7 +121,7 @@ end
 
 "Identifies whether a entity is a unique state."
 @pooled_component Base.@kwdef struct RandomSearcher
-    nsearchers::Int=10
+    nsearchers::Int=50
 end
 
 "Identifies whether a entity is a unique state."

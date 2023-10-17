@@ -183,16 +183,21 @@ function update_modeldata!(l::AbstractLedger)
 end
 
 function prepare_data(l::Searcher)
+    es = collect(@entities_in(l, ModelData))
+    return prepare_data(es)
+end
+
+function prepare_data(es::AbstractVector)
     xs = Matrix{Float32}[]
     ys = Matrix{Float32}[]
-    for e in @entities_in(l, ModelData)
+    for e in es
         push!(xs, e.x)
         push!(ys, e.y)
     end
     hcat(xs...), hcat(ys...)
 end
 
-@pooled_component Base.@kwdef struct TrainerSettings
+@pooled_component Base.@kwdef mutable struct TrainerSettings
     n_iterations_per_training::Int
     # This determines how much additional data w.r.t. previous there needs to be, like 1.2= 20% more data
     new_train_data_ratio::Float64
@@ -204,19 +209,30 @@ end
 end
 
 
-function model_summary(l::AbstractLedger)
-    isempty(l[Model]) && return nothing
-    n_model = length(l[Model])
-    data = Matrix{String}(undef, n_model, 3)
-    X, y = prepare_data(l)
-    nat = length(l[Results][1].state.occupations)
-    for i in 1:n_model
-        data[i, 1] = string(i)
-        data[i, 2] = string(l[Model][i].n_points)
-        m = model(l, i)
-        loss = model_loss(m(X), y, nat)
-        data[i, 3] = string(loss)
+function model_summary(m::AbstractLedger)
+    isempty(m[Model]) && return nothing
+
+    nat = length(m[Results][1].state.occupations)
+    d = m[ModelData][1]
+    n_features = size(d.x, 1)
+    n_output = size(d.y, 1)
+    tmp_model = mlp_single_atom(n_features, n_output)
+
+    X, y = prepare_data(m)
+    data = []
+    i = 0
+    for (model, es) in pools(m[Model])
+        i += 1
+        row = Vector{String}(undef, 3)
+        row[1] = string(i)
+        row[2] = string(model.n_points)
+        Flux.loadmodel!(tmp_model, model.model_state)
+        loss = model_loss(tmp_model(X), y, nat)
+        row[3] = string(loss)
+        push!(data, row)
     end
+    data = permutedims(hcat(data...))
+
     to_text = sprint() do io
         pretty_table(io, data, header = ["Version", "Training Size", "Loss"])
     end
@@ -285,24 +301,21 @@ end
 
 function Overseer.update(::ModelTrainer, m::AbstractLedger)
     trainer_settings = m[TrainerSettings][1]
-    
     prev_model = isempty(m[Model]) ? nothing : m[Model][end]
-    
+    # number of total data points, including duplications
     n_points = sum(x -> x.converged ? x.niterations - x.constraining_steps : 0, m[Results], init=0)
-    
     prev_points = prev_model === nothing ? 0 : prev_model.n_points
-
     if n_points > prev_points * trainer_settings.new_train_data_ratio
-        
         model = train_model(m, n_points)
-        
         Entity(m, m[Template][1], model, Generation(length(m[Model].c.data)+1))
     end
 end
 
-@component Base.@kwdef struct MLTrialSettings
+@component Base.@kwdef mutable struct MLTrialSettings
     n_tries::Int = 10000
     minimum_distance::Float64 = 1.0
+    use_ml::Bool = true
+    curr_model_npoints::Int = 0
 end
 
 struct MLTrialGenerator <: System end
@@ -312,12 +325,15 @@ end
 
 function model(m::AbstractLedger, i=length(m[Model]))
     # if no model yet, skip
+    # TODO: Model is a pooled components, and all trials by it would point to the model
+    # needs to use pools to deduplicate
     model = isempty(m[Model]) ? nothing : m[Model][i]
     model === nothing && return
     d = m[ModelData][1]
     n_features = size(d.x, 1)
     n_output = size(d.y, 1)
     flux_model = mlp_single_atom(n_features, n_output)
+    @debug "loading model with train datasize: $(model.n_points)"
     Flux.loadmodel!(flux_model, model.model_state)
     return flux_model
 end
@@ -328,17 +344,27 @@ function Overseer.update(::MLTrialGenerator, m::AbstractLedger)
     if length(m[Results]) < 10
         return
     end
+
     # if no model yet, skip
     flux_model = model(m)
     flux_model === nothing && return
     model_e = last_entity(m[Model])
     
+    # if model trial has been stopped and no new model, skip
+    trial_settings = m[MLTrialSettings][1]
+    if !trial_settings.use_ml && trial_settings.curr_model_npoints >= flux_model.n_points
+        return
+    end
+    trial_settings.curr_model_npoints = flux_model.n_points
+    trial_settings.use_ml = true
+
+
     # unique_states = @entities_in(m, Unique && Results)
     # pending_states = @entities_in(m, Trial && !Results)
 
     n_new = 0
-    max_tries = m[MLTrialSettings][1].n_tries
-    dist_thr  = m[MLTrialSettings][1].minimum_distance
+    max_tries = trial_settings.n_tries
+    dist_thr  = trial_settings.minimum_distance
     last_max_dist = 0 
     while max_new(m) > 0
         max_dist = 0

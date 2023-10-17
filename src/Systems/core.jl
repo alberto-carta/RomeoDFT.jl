@@ -628,7 +628,22 @@ function Overseer.update(::Stopper, m::AbstractLedger)
     end
 
     maxgen = maximum_generation(m)
-    stop_condition_met, n_unique, n_total = stop_check(m)
+    ml_stop, n_unique, n_total = stop_check(m)
+
+    # if ml model not finding new unique states for some consequtive generations,
+    # stop ml so to save the trial quota for random trials
+    if ml_stop && m[MLTrialSettings][1].curr_model_npoints >= m[Model][end].n_points
+        m[MLTrialSettings][1].use_ml = false
+    end
+
+    # if random budget has also run out, then stop
+    n_random = length(filter(e->e.origin==RandomMixed, m[Trial]))
+    random_search = singleton(m, RandomSearcher)
+    if !m[MLTrialSettings][1].use_ml && n_random >= random_search.nsearchers
+        stop_condition_met = true
+    end
+    stop_condition_met = false
+
 
     search_entities = @entities_in(m, Trial && !Intersection)
     search_done     = all(x -> x in m[Done] || x in m[Error], search_entities)

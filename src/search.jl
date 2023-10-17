@@ -528,7 +528,7 @@ This is the backend method used for the `romeo searcher create` from the command
 """
 function setup_search(name, scf_file, structure_file = scf_file;
                       mode="search",
-                      nrand = 10,
+                      nrand = 50,
                       mixing = EulerAngleMixing,
                       γ = 1.0,
                       α = 0.5,
@@ -635,7 +635,7 @@ function final_report(l::Searcher)
     n_trials    = 0
     n_converged = 0
     n_unique    = 0
-    for e in @entities_in(l, Results && (Intersection || RandomSearcher))
+    for e in @entities_in(l, Results && Trial)
         n_trials += 1
 
         if e.converged
