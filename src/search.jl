@@ -1,3 +1,5 @@
+using Combinatorics: combinations
+
 """
     Searcher(name)
 
@@ -410,13 +412,13 @@ function setup_structure(structure_file, supercell, primitive; pseudoset=nothing
         
     end
 
-    mag = (1e-5, -1e-5)
+    # assign ferromagnetic to str
     magcount = 1
     for (atsym, U) in U_values
         for a in filter(x -> x.name == atsym, str.atoms)
             a.dftu.U = U
             if !use_input_magnetization
-                a.magnetization = [0.0, 0.0, mag[mod1(magcount, 2)]]
+                a.magnetization = [0.0, 0.0, 1e-5]
             end
             magcount += 1
         end
@@ -428,6 +430,37 @@ function setup_structure(structure_file, supercell, primitive; pseudoset=nothing
     @info "Structure that will be used:"
     display(str)
     return str
+end
+
+function heuristic_search(l, calc, struc)
+    id_magatoms = findall(a->a.dftu.U != 0, struc.atoms)
+    n_mag = length(id_magatoms)
+    mag = (1e-5, -1e-5)
+    base_es = []
+
+    configs = [ones(Int, n_mag)]
+    for n in 1:maximum((1, floor(Int, n_mag/2)))
+        for idx in combinations(1:n_mag, n)
+            tmp = ones(Int, n_mag)
+            for i in idx
+                tmp[i] = -1
+            end
+            push!(configs, tmp)
+        end
+    end
+
+    for config in configs
+        structmp = deepcopy(struc)
+        for i in eachindex(config)
+            structmp.atoms[i].magnetization = [0.0, 0.0, config[i] * 1e-5]
+        end
+        push!(base_es, Entity(l,
+            BaseCase(),
+            Template(structmp, deepcopy(calc)),
+            Generation(1)))
+    end
+
+    return base_es
 end
 
 # All kwargs here are strings except priority
@@ -496,7 +529,7 @@ This is the backend method used for the `romeo searcher create` from the command
 - `priority=nothing`: number signifying the priority of the [`Searcher`](@ref)
 
 # Search Kwargs
-- `nrand=10`: how many random trials should be performed in a random search generation
+- `nrand=50`: how much random search budget in total for trials
 - `unique_thr=0.1`: threshold that determines the uniqueness of electronic states (uses [`sssp_distance`](@ref))
 - `mindist_ratio=0.25`: minimum distance a trial should have to previous trials and unique states,
                         defined as the ratio of the mean distance between current unique states
@@ -592,10 +625,7 @@ function setup_search(name, scf_file, structure_file = scf_file;
                    StopCondition(stopping_unique_ratio, stopping_n_generations),
                    Generation(1))
     # BaseCase simulation entity
-    base_e = Entity(l, BaseCase(),
-                    Template(deepcopy(str),
-                             deepcopy(calc)),
-                    Generation(1))
+    base_es = heuristic_search(l, calc, str)
 
     unique_e = Entity(l, Unique(unique_thr, true), Generation(1))
 
@@ -605,7 +635,9 @@ function setup_search(name, scf_file, structure_file = scf_file;
         l[unique_e] = relset
     end
     if relax_base
-        l[base_e] = relset
+        for e in base_es
+            l[e] = relset
+        end
     end
 
     hpset = HPSettings(hp_nq, hp_conv_thr_chi, hp_find_atpert, hp_U_conv_thr, 15.0)
@@ -613,7 +645,9 @@ function setup_search(name, scf_file, structure_file = scf_file;
         l[unique_e] = hpset
     end
     if hp_base
-        l[base_e] = hpset
+        for e in base_es
+            l[e] = hpset
+        end
     end
 
     ishybrid = haskey(calc, :input_dft) || haskey(calc, :exxdiv_treatment)
@@ -1227,3 +1261,4 @@ function scf_iterations_per_unique(l::Searcher)
     end
     out
 end
+
