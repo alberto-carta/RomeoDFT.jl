@@ -33,10 +33,10 @@ cleanup_stage() = Stage(:cleanup, [creation_stage(),
                                    postprocessing_stage(),
                                    finalize_stage()])
 
-ml_stage() = Stage(:intersection, [ModelDataExtractor(), ModelTrainer(), MLTrialGenerator(), RandomTrialGenerator()])
+ml_stage() = Stage(:intersection, [ModelDataExtractor(), MLTrialGenerator(), RandomTrialGenerator()])
 # firefly_stage() = Stage(:firefly, [FireFly(), PostFireflyExplorer(), Archiver()])
 
-search_stage() = Stage(:main, [core_stage(), ml_stage()])
+search_stage() = Stage(:main, [core_stage(), ml_stage(), ModelTrainer()])
 
 # for benchmark
 random_only() = Stage(:main, [core_stage(), Stage(:random, [RandomTrialGenerator()])])

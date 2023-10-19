@@ -315,7 +315,7 @@ end
     n_tries::Int = 10000
     minimum_distance::Float64 = 1.0
     use_ml::Bool = true
-    curr_model_npoints::Int = 0
+    prev_model_npoints::Int = 0
 end
 
 struct MLTrialGenerator <: System end
@@ -346,16 +346,17 @@ function Overseer.update(::MLTrialGenerator, m::AbstractLedger)
     end
 
     # if no model yet, skip
-    flux_model = model(m)
-    flux_model === nothing && return
+    isempty(m[Model]) && return
     model_e = last_entity(m[Model])
+    flux_model = model(m)
+    romeo_model = m[Model][model_e]
     
     # if model trial has been stopped and no new model, skip
     trial_settings = m[MLTrialSettings][1]
-    if !trial_settings.use_ml && trial_settings.curr_model_npoints >= flux_model.n_points
+    if !trial_settings.use_ml && trial_settings.prev_model_npoints >= romeo_model.n_points
         return
     end
-    trial_settings.curr_model_npoints = flux_model.n_points
+    trial_settings.prev_model_npoints = romeo_model.n_points
     trial_settings.use_ml = true
 
 
