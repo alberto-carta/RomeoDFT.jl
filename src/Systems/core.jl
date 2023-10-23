@@ -607,7 +607,6 @@ function verify_groundstates!(m::AbstractLedger)
 end
 
 function Overseer.update(::Stopper, m::AbstractLedger)
-
     # Handle cleanup stopping
     if m.mode == :cleanup
         entities_to_clean = @entities_in(m, SimJob && !Submit && !Error)
@@ -631,19 +630,19 @@ function Overseer.update(::Stopper, m::AbstractLedger)
     ml_stop, n_unique, n_total = stop_check(m)
 
     # if ml model not finding new unique states for some consequtive generations,
-    # stop ml so to save the trial quota for random trials
-    if ml_stop && m[MLTrialSettings][1].curr_model_npoints >= m[Model][end].n_points
+    # stop ml so to save the new trial quota for random trials
+    if m.model == :search && ml_stop && m[MLTrialSettings][1].prev_model_npoints >= m[Model][end].n_points
         m[MLTrialSettings][1].use_ml = false
     end
 
     # if random budget has also run out, then stop
     n_random = length(filter(e->e.origin==RandomMixed, m[Trial]))
     random_search = singleton(m, RandomSearcher)
-    if !m[MLTrialSettings][1].use_ml && n_random >= random_search.nsearchers
+    if (!m[MLTrialSettings][1].use_ml || m.mode ∈ [:manual, :random]) && n_random >= random_search.nsearchers
         stop_condition_met = true
+    else
+        stop_condition_met = false
     end
-    stop_condition_met = false
-
 
     search_entities = @entities_in(m, Trial && !Intersection)
     search_done     = all(x -> x in m[Done] || x in m[Error], search_entities)
@@ -654,7 +653,6 @@ function Overseer.update(::Stopper, m::AbstractLedger)
         return
     end
         
-
     if mode(m) == :postprocess
         all_entities = @entities_in(m, (Trial || BaseCase) && !(Done || Error))
         if length(all_entities) == 0 && all(x->x.cleaned, @entities_in(m, Done && !Error))

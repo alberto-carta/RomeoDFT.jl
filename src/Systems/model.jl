@@ -257,7 +257,7 @@ function train_model(l::AbstractLedger, n_points)
     ndat = size(X[:, train], 2)
     n_features = size(X, 1)
     nat = length(l[Results][1].state.occupations)
-    batchsize = 3000
+    batchsize = maximum(3000, ndat)
 
     loader = DataLoader((X[:, train], y[:, train]), batchsize=batchsize, shuffle=true)
     
@@ -286,7 +286,7 @@ function train_model(l::AbstractLedger, n_points)
         if i % 100 == 0
             @show i, train_loss[end], test_loss[end]
         end
-        if i > 300 && test_loss[end] < min_loss
+        if i > 100 && test_loss[end] < min_loss
             best_state = Flux.state(deepcopy(model))
             min_loss = test_loss[end]
         end

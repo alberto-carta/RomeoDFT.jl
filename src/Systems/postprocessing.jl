@@ -276,7 +276,6 @@ function Overseer.update(::UniqueExplorer, m::AbstractLedger)
         end
         
         if postprocess_children
-            
             pp_e = create_postprocess_child!(m, e)
             m[e] = Done(false)
         else
