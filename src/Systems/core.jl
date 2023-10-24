@@ -631,7 +631,7 @@ function Overseer.update(::Stopper, m::AbstractLedger)
 
     # if ml model not finding new unique states for some consequtive generations,
     # stop ml so to save the new trial quota for random trials
-    if m.model == :search && ml_stop && m[MLTrialSettings][1].prev_model_npoints >= m[Model][end].n_points
+    if m.mode == :search && ml_stop && m[MLTrialSettings][1].prev_model_npoints >= m[Model][end].n_points
         m[MLTrialSettings][1].use_ml = false
     end
 

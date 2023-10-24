@@ -257,7 +257,7 @@ function train_model(l::AbstractLedger, n_points)
     ndat = size(X[:, train], 2)
     n_features = size(X, 1)
     nat = length(l[Results][1].state.occupations)
-    batchsize = maximum(3000, ndat)
+    batchsize = min(3000, ndat)
 
     loader = DataLoader((X[:, train], y[:, train]), batchsize=batchsize, shuffle=true)
     
