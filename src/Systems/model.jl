@@ -374,11 +374,12 @@ function Overseer.update(::MLTrialGenerator, m::AbstractLedger)
             
             s = State(flux_model, rand_trial(m)[1].state)
 
-            if any(x->x<0, diag(s.occupations[1])) || any(x -> x < 0, s.eigvals[1])
+            if any(x->any(xi->xi<0, x), diag.(s.occupations)) || any(x -> any(xi->xi < 0, x), s.eigvals)
                 continue
             end
         
             min_dist = Inf
+            # check duplication with unique results
             for e in @entities_in(m, Unique && Results)
                 dist = Euclidean()(e.state, s)
                 if dist < min_dist
@@ -387,6 +388,7 @@ function Overseer.update(::MLTrialGenerator, m::AbstractLedger)
                 end
             end
 
+            # check duplication with previous trials
             for e in @entities_in(m, Trial)
                 dist = Euclidean()(e.state, s)
                 if dist < min_dist
@@ -400,13 +402,14 @@ function Overseer.update(::MLTrialGenerator, m::AbstractLedger)
                 new_s = s
                 break
             else
+                # if after max_tries, no trial pass dist_thr, we use trials with max min_dist
                 if min_dist > max_dist
                     max_dist = min_dist
                     new_s = s
                 end
             end
         end
-        @debug "New ml trial max dist $max_dist"
+        @debug "New ml trial with min distance: $max_dist"
         trial = Trial(new_s, RomeoDFT.ModelOptimized) # TODO other tag?
         # add new entity with optimized occ
         new_e = add_search_entity!(m, model_e, trial, m[Generation][model_e])
