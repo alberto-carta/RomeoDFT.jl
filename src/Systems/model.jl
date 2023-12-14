@@ -208,6 +208,21 @@ end
     model_state
 end
 
+function model(m::AbstractLedger, i::Int)
+    isempty(m[Model]) && return nothing
+    nat = length(m[Results][1].state.occupations)
+    d = m[ModelData][1]
+    n_features = size(d.x, 1)
+    n_output = size(d.y, 1)
+    tmp_model = mlp_single_atom(n_features, n_output)
+    e = entity(m[Model], i)
+    Flux.loadmodel!(tmp_model, m[e][Model].model_state)
+
+    X, y = prepare_data(m)
+    loss = model_loss(tmp_model(X), y, nat)
+    @info loss
+    return tmp_model
+end
 
 function model_summary(m::AbstractLedger)
     isempty(m[Model]) && return nothing
@@ -227,7 +242,7 @@ function model_summary(m::AbstractLedger)
         row[1] = string(i)
         row[2] = string(model.n_points)
         Flux.loadmodel!(tmp_model, model.model_state)
-        loss = model_loss(tmp_model(X), y, nat)
+        loss = model_loss_report(tmp_model(X), y, nat)
         row[3] = string(loss)
         push!(data, row)
     end
@@ -244,10 +259,21 @@ function Overseer.requested_components(::ModelTrainer)
     return (TrainerSettings, Intersection, Model)
 end
 
+"""
+MSE loss on the full feature set, used for training.
+"""
 @views function model_loss(y, yhat, nat)
     l1 = Flux.Losses.mse(y[1:2nat, :], yhat[1:2nat, :])
     l2 = Flux.Losses.mse(tanh.(y[2nat+1:end, :]), tanh.(yhat[2nat+1:end, :]))
     return l1 + l2
+end
+
+"""
+MSE loss only on the occupation matrix, used for evaluation not training.
+"""
+@views function model_loss_report(y, yhat, nat)
+    l2 = Flux.Losses.mse(tanh.(y[2nat+1:end, :]), tanh.(yhat[2nat+1:end, :]))
+    return l2
 end
 
 function train_model(l::AbstractLedger, n_points)

@@ -522,14 +522,14 @@ This is the backend method used for the `romeo searcher create` from the command
 # Control Kwargs
 - `verbosity=0`: the logging verbosity, higher = more. See [Data](@ref) for more info
 - `sleep_time=30`: time in seconds between update polls of the [`Searcher`](@ref)
-- `max_concurrent_trials=10`: amount of trials that are submitted/running to the remote at once
+- `max_concurrent_trials=5`: amount of trials that are submitted/running to the remote at once
 - `server=nothing`: label of `Server` on which to run everything
 - `exec=nothing`: label of the `pw.x` executable on `server` to use for the search
 - `environment=nothing`: label of the `Environment` to use for running all calculations
 - `priority=nothing`: number signifying the priority of the [`Searcher`](@ref)
 
 # Search Kwargs
-- `nrand=50`: how much random search budget in total for trials
+- `nrand=300`: how much random search budget in total for trials
 - `unique_thr=0.1`: threshold that determines the uniqueness of electronic states (uses [`sssp_distance`](@ref))
 - `mindist_ratio=0.25`: minimum distance a trial should have to previous trials and unique states,
                         defined as the ratio of the mean distance between current unique states
@@ -561,7 +561,7 @@ This is the backend method used for the `romeo searcher create` from the command
 """
 function setup_search(name, scf_file, structure_file = scf_file;
                       mode="search",
-                      nrand = 50,
+                      nrand = 300,
                       mixing = EulerAngleMixing,
                       γ = 1.0,
                       α = 0.5,
