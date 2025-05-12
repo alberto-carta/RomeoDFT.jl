@@ -22,11 +22,13 @@ if !haskey(ENV, "CI")
     if !haskey(Pkg.dependencies(), UUIDs.UUID("87c4fabc-abb4-4467-86a6-1748b5c259fe"))
         Pkg.add(url="https://github.com/louisponet/RomeoDFT.jl")
     end
+    @info "updating packages"
     Pkg.update()
 
     if !occursin("config/RomeoDFT", pwd())
         Pkg.activate(".")
         using RomeoDFT
+        @info "install comonicon"
         RomeoDFT.comonicon_install()
     end
 end

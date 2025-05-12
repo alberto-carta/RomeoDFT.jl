@@ -85,7 +85,7 @@ const Timer                = RomeoDFT.v0_1.Timer
 const ServerInfo           = RomeoDFT.v0_5.ServerInfo
 const ShouldRerun          = RomeoDFT.v0_2.ShouldRerun
 const WannierSettings      = RomeoDFT.v0_5.WannierSettings
-const RandomSearcher       = RomeoDFT.v0_5.RandomSearcher
+const RandomSearchSettings = RomeoDFT.v0_6.RandomSearchSettings
 const HPSettings           = RomeoDFT.v0_2.HPSettings
 const PPSettings           = RomeoDFT.v0_6.PPSettings
 const ElectrideSettings    = RomeoDFT.v0_6.ElectrideSettings
@@ -132,7 +132,7 @@ export Timer
 export ServerInfo          
 export ShouldRerun         
 export WannierSettings     
-export RandomSearcher      
+export RandomSearchSettings      
 export HPSettings
 export PPSettings
 export ElectrideSettings

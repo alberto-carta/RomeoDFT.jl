@@ -248,3 +248,4 @@ Holds general information on the Searcher.
     n_pending_calcs::Int = 0
 end
 end
+

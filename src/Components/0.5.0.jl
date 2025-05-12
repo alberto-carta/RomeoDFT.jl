@@ -119,12 +119,7 @@ end
     bands::Bool = false
 end
 
-"Identifies whether a entity is a unique state."
-@pooled_component Base.@kwdef struct RandomSearcher
-    nsearchers::Int=50
-end
-
-"Identifies whether a entity is a unique state."
+"Identifies whether a calculation and all its postprocessing steps are done."
 @component struct Done
     cleaned::Bool
 end

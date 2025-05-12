@@ -69,6 +69,14 @@ Settings to control PP calculations
     range_above::Float64 = 0.2
 end
 
-
+"""
+    RandomSearchSettings
+nsearchers: the total budget of random generated trials
+"""
+@pooled_component Base.@kwdef struct RandomSearchSettings
+    nsearchers::Int=50
+end
+Base.convert(::Type{RandomSearchSettings}, x::v0_5.RandomSearcher) =
+    RandomSearchSettings(x.nsearchers)
 
 end

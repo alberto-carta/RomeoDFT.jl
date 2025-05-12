@@ -638,7 +638,7 @@ function Overseer.update(::Stopper, m::AbstractLedger)
 
     # if random budget has also run out, then stop
     n_random = length(filter(e->e.origin==RandomMixed, m[Trial]))
-    random_search = singleton(m, RandomSearcher)
+    random_search = singleton(m, RandomSearchSettings)
     if !m[MLTrialSettings][1].use_ml && n_random >= random_search.nsearchers
         stop_condition_met = true
     end
