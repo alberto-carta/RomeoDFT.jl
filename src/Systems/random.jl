@@ -11,26 +11,29 @@ function rand_trial(l::Searcher, n=1)
 
     # Here we check whether different oxidation states have been tried
     # if yes we start randomly taking the total occupations for eigenvalues
-    diff_ox_tried = !isempty(l[Trial]) && round(Int, maximum(x -> sum(x.state.totoccs), l[Trial])) != round(Int, minimum(x->sum(x.state.totoccs), l[Trial]))
+    ox = isempty(l[Trial]) ? [0,0] : extrema(x->sum(x.state.totoccs), l[Trial])
+    diff_ox_tried = (ox[1] != ox[2])
 
-    out = Trial[]
-    for i = 1:n
-        if !diff_ox_tried
-            push!(out, rand_trial(norb, nelec))
-        else
-            eigvals = map(1:length(nelec)) do i
-                e = Entity(l[Unique], rand(1:length(l[Unique])))
-                
-                while !(e in l[Results])
-                    e = Entity(l[Unique], rand(1:length(l[Unique])))
-                end
-            
-                l[Results][e].state.eigvals[i]
-            end
-            
-            push!(out, rand_trial(eigvals))
-        end
-    end
+    out = Trial[rand_trial(norb, nelec) for _ in 1:n]
+    
+    # for i = 1:n
+    #     if !diff_ox_tried
+    #         push!(out, rand_trial(norb, nelec))
+    #     else
+    #         # take eigenvalues from different entities
+    #         eigvals = map(1:length(nelec)) do i
+    #             # e = Entity(l[Unique], rand(1:length(l[Unique])))
+    #             # while !(e in l[Results])
+    #             #     e = Entity(l[Unique], rand(1:length(l[Unique])))
+    #             # end
+    #
+    #             e = rand(collect(@entities_in(l, Unique && Results)))
+    #             l[Results][e].state.eigvals[i]
+    #         end
+    #         
+    #         push!(out, rand_trial(eigvals))
+    #     end
+    # end
     return out
 end
 
@@ -87,18 +90,18 @@ function Overseer.update(::RandomTrialGenerator, m::AbstractLedger)
         return
     end
 
-    # First make sure the base case calculation is finished
-    base_e = entity(m[BaseCase], 1)
-    if isempty(m[BaseCase]) || !all_children_done(m, base_e) || base_e ∉ m[Results]
+    # at least one base case calculation is finished
+    base_e = filter(@entities_in(m, BaseCase)) do e
+        all_children_done(m, e) && e ∈ m[Results] && !isempty(m[Results][e].state.occupations)
+    end
+    if isempty(base_e)
+        @debug "Base cases not finished, exit RadomTrialGenerator without creating trials"
         return
+    else
+        base_e = base_e[1]
     end
     
-    base_state = m[Results][base_e].state
-    if isempty(base_state.occupations)
-        @error "Something went wrong with the basecase calculation"
         return
-    end
-    rand_search_e = entity(m[RandomSearchSettings], 1)
 
     maxgen = maximum_generation(m)
     n_new = max_new(m)

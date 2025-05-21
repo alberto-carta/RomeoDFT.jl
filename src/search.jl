@@ -489,14 +489,14 @@ This is the backend method used for the `romeo searcher create` from the command
 # Control Kwargs
 - `verbosity=0`: the logging verbosity, higher = more. See [Data](@ref) for more info
 - `sleep_time=30`: time in seconds between update polls of the [`Searcher`](@ref)
-- `max_concurrent_trials=10`: amount of trials that are submitted/running to the remote at once
+- `max_concurrent_trials=5`: amount of trials that are submitted/running to the remote at once
 - `server=nothing`: label of `Server` on which to run everything
 - `exec=nothing`: label of the `pw.x` executable on `server` to use for the search
 - `environment=nothing`: label of the `Environment` to use for running all calculations
 - `priority=nothing`: number signifying the priority of the [`Searcher`](@ref)
 
 # Search Kwargs
-- `nrand=10`: how many random trials should be performed in a random search generation
+- `nrand=300`: how much random search budget in total for trials
 - `unique_thr=0.1`: threshold that determines the uniqueness of electronic states (uses [`sssp_distance`](@ref))
 - `mindist_ratio=0.25`: minimum distance a trial should have to previous trials and unique states,
                         defined as the ratio of the mean distance between current unique states
@@ -528,7 +528,7 @@ This is the backend method used for the `romeo searcher create` from the command
 """
 function setup_search(name, scf_file, structure_file = scf_file;
                       mode="search",
-                      nrand = 10,
+                      nrand = 300,
                       mixing = EulerAngleMixing,
                       γ = 1.0,
                       α = 0.5,
@@ -753,8 +753,7 @@ function status(io::IO, l::Searcher)
     println(io, "Unique states:        $(length(l[Unique]))")
     println(io, "Total Trials:         $(length(@entities_in(l, Results && !Parents))),$(length(filter(x->!x.converged, @entities_in(l, Results && !Parents)))) non-converged")
     println(io, "Total scf iterations: $(sum(x->x.niterations, l[Results], init=0))")
-    println(io, "Trained models: ")
-    if !(l.mode == :random || isempty(l[Model]))
+    if l.mode == :search && !isempty(l[Model])
         println(io, model_summary(l))
     end
 

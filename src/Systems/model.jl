@@ -203,25 +203,29 @@ end
     model_state
 end
 
+        row[3] = string(loss)
 struct ModelTrainer <: System end
 function Overseer.requested_components(::ModelTrainer)
     return (TrainerSettings, Intersection, Model)
 end
 
+"""
+MSE loss on the full feature set, used for training.
+"""
 @views function model_loss(y, yhat, nat)
     l1 = Flux.Losses.mse(y[1:2nat, :], yhat[1:2nat, :])
     l2 = Flux.Losses.mse(tanh.(y[2nat+1:end, :]), tanh.(yhat[2nat+1:end, :]))
     return l1 + l2
 end
 
-function train_model(l::Searcher, n_points)
+    return l2
     trainer_settings = l[TrainerSettings][1]
     X, y = prepare_data(l)
     test, train = Flux.splitobs(size(X,2), at=0.1)
     ndat = size(X[:, train], 2)
     n_features = size(X, 1)
     nat = length(l[Results][1].state.occupations)
-    batchsize = 3000
+    batchsize = min(3000, ndat)
 
     loader = DataLoader((X[:, train], y[:, train]), batchsize=batchsize, shuffle=true)
     
@@ -250,7 +254,7 @@ function train_model(l::Searcher, n_points)
         if i % 100 == 0
             @show i, train_loss[end], test_loss[end]
         end
-        if i > 300 && test_loss[end] < min_loss
+        if i > 100 && test_loss[end] < min_loss
             best_state = Flux.state(deepcopy(model))
             min_loss = test_loss[end]
         end
@@ -325,11 +329,12 @@ function Overseer.update(::MLTrialGenerator, m::AbstractLedger)
             
             s = State(flux_model, rand_trial(m)[1].state)
 
-            if any(x->x<0, diag(s.occupations[1])) || any(x -> x < 0, s.eigvals[1])
+            if any(x->any(xi->xi<0, x), diag.(s.occupations)) || any(x -> any(xi->xi < 0, x), s.eigvals)
                 continue
             end
         
             min_dist = Inf
+            # check duplication with unique results
             for e in @entities_in(m, Unique && Results)
                 dist = Euclidean()(e.state, s)
                 if dist < min_dist
@@ -338,6 +343,7 @@ function Overseer.update(::MLTrialGenerator, m::AbstractLedger)
                 end
             end
 
+            # check duplication with previous trials
             for e in @entities_in(m, Trial)
                 dist = Euclidean()(e.state, s)
                 if dist < min_dist
@@ -351,13 +357,14 @@ function Overseer.update(::MLTrialGenerator, m::AbstractLedger)
                 new_s = s
                 break
             else
+                # if after max_tries, no trial pass dist_thr, we use trials with max min_dist
                 if min_dist > max_dist
                     max_dist = min_dist
                     new_s = s
                 end
             end
         end
-        @debug "New ml trial max dist $max_dist"
+        @debug "New ml trial with min distance: $max_dist"
         trial = Trial(new_s, RomeoDFT.ModelOptimized) # TODO other tag?
         # add new entity with optimized occ
         new_e = add_search_entity!(m, model_e, trial, m[Generation][model_e])
