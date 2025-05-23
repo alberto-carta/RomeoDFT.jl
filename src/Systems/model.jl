@@ -203,7 +203,6 @@ end
     model_state
 end
 
-        row[3] = string(loss)
 struct ModelTrainer <: System end
 function Overseer.requested_components(::ModelTrainer)
     return (TrainerSettings, Intersection, Model)
@@ -218,7 +217,7 @@ MSE loss on the full feature set, used for training.
     return l1 + l2
 end
 
-    return l2
+function train_model(l::Searcher, n_points)
     trainer_settings = l[TrainerSettings][1]
     X, y = prepare_data(l)
     test, train = Flux.splitobs(size(X,2), at=0.1)
