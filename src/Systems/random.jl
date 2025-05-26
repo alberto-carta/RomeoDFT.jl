@@ -1,6 +1,6 @@
 struct RandomTrialGenerator <: System end
 function Overseer.requested_components(::RandomTrialGenerator)
-    return (RandomSearchSettings, Intersection, BaseCase)
+    return (RandomSearcher, Intersection, BaseCase)
 end
 
 function rand_trial(l::Searcher, n=1)
@@ -79,12 +79,12 @@ end
 
 function Overseer.update(::RandomTrialGenerator, m::AbstractLedger)
     # should we throw error if either is empty?
-    if isempty(m[RandomSearchSettings]) || isempty(m[BaseCase])
+    if isempty(m[RandomSearcher]) || isempty(m[BaseCase])
         return
     end
 
     # check if there is still random search budget
-    random_search = singleton(m, RandomSearchSettings)
+    random_search = singleton(m, RandomSearcher)
     n_random = length(filter(e->e.origin==RandomMixed, m[Trial]))
     if n_random >= random_search.nsearchers
         return
@@ -101,7 +101,12 @@ function Overseer.update(::RandomTrialGenerator, m::AbstractLedger)
         base_e = base_e[1]
     end
     
+    base_state = m[Results][base_e].state
+    if isempty(base_state.occupations)
+        @error "Something went wrong with the base case calculation"
         return
+    end
+    rand_search_e = entity(m[RandomSearcher], 1)
 
     maxgen = maximum_generation(m)
     n_new = max_new(m)

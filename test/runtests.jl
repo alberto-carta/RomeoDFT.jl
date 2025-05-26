@@ -130,7 +130,7 @@ for case in test_cases
         base_e = Entity(l, BaseCase(),
                            deepcopy(template),
                            Generation(1))
-        sim_entity = Entity(l, RandomSearchSettings(10),
+        sim_entity = Entity(l, RandomSearcher(10),
                                deepcopy(template),
                                Unique(1e-2, true),
                                IntersectionSearcher(0.25, 100),

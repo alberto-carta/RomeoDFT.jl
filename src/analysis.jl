@@ -40,9 +40,9 @@ function write_xsf(filename::String, l::AbstractLedger)
     write_xsf(filename, gs)
 end
 
-function relative_energies(es; include_hub_energy = true, eV = true)
+function relative_energies(es; include_hub_energy = true, eV = true, per_atom=true)
     E_conv_fac = eV ? 13.6056980659 : 1.0
-    nat = length(first(es)[Template].structure.atoms)
+    nat = per_atom ? length(first(es)[Template].structure.atoms) : 1
     energies = include_hub_energy ? map(x -> x.total_energy * E_conv_fac / nat, es) :
                map(x -> dft_energy(x) * E_conv_fac / nat, es)
     return energies .- minimum(energies)
