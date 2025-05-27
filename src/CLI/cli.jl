@@ -1,4 +1,6 @@
 using Comonicon
+using Comonicon: @main
+
 
 """
 Orchestrator commands
@@ -137,7 +139,7 @@ module searcher
     - `--verbosity=<0>`: the logging verbosity, higher = more
     - `--sleep-time=<30>`: time in seconds between updates of the searcher
     - `--max-concurrent-trials=<10>`: amount of trials that are submitted/running to the remote at once 
-    - `--nrand=<10>`: random trials budget
+    - `--nrand=<300>`: maximum random trials in total
     - `--unique-thr=<0.1>`: threshold that determines the uniqueness of electronic states (uses `sssp_distance`)
     - `--mindist-ratio=<0.25>`: minimum distance a trial should have as the ratio of the mean distance between current unique states
     - `--stopping-unique-ratio=<0.2>`: the ratio of unique states to trials below which the searching will stop
@@ -180,7 +182,7 @@ module searcher
                           use_input_magnetization::Bool=false,
                           verbosity::Int = 0,
                           sleep_time::Float64 = 30.0,
-                          nrand::Int = 50,
+                          nrand::Int = 300,
                           unique_thr::Float64 = 0.1,
                           mindist_ratio::Float64 = 0.25,
                           stopping_unique_ratio::Float64 = 0.2,
@@ -284,6 +286,9 @@ module searcher
 end
 @cast searcher
 
+"""
+Server commands
+"""
 module server
     using Comonicon
     using ..RomeoDFT: RemoteHPC, orchestrator_eval, pretty_table, Server
@@ -420,4 +425,4 @@ end
     
 # end
 
-# @main
+@main

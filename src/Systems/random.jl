@@ -9,12 +9,11 @@ function rand_trial(l::Searcher, n=1)
     nelec      = round.(Int, base_state.totoccs)
     norb       = size.(base_state.occupations, 1)
 
-    # Here we check whether different oxidation states have been tried
-    # if yes we start randomly taking the total occupations for eigenvalues
-    ox = isempty(l[Trial]) ? [0,0] : extrema(x->sum(x.state.totoccs), l[Trial])
-    diff_ox_tried = (ox[1] != ox[2])
-
     out = Trial[rand_trial(norb, nelec) for _ in 1:n]
+    # # Here we check whether different oxidation states have been tried
+    # # if yes we start randomly taking the total occupations for eigenvalues
+    # ox = isempty(l[Trial]) ? [0,0] : extrema(x->sum(x.state.totoccs), l[Trial])
+    # diff_ox_tried = (ox[1] != ox[2])
     
     # for i = 1:n
     #     if !diff_ox_tried

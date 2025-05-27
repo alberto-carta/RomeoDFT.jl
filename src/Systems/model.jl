@@ -344,12 +344,14 @@ end
 function Overseer.update(::MLTrialGenerator, m::AbstractLedger)
     # TODO: start condition should be after heuristic phase
     # this is something that could be addressed by a higher level system
+
+    # too few results for training
     if length(m[Results]) < 10
         return
     end
-
     # if no model yet, skip
-    isempty(m[Model]) && return
+    flux_model = model(m)
+    flux_model === nothing && return
     model_e = last_entity(m[Model])
     flux_model = model(m)
     romeo_model = m[Model][model_e]
@@ -365,6 +367,15 @@ function Overseer.update(::MLTrialGenerator, m::AbstractLedger)
 
     # unique_states = @entities_in(m, Unique && Results)
     # pending_states = @entities_in(m, Trial && !Results)
+    romeo_model = m[Model][model_e]
+    
+    # if model trial has been stopped and no new model, skip
+    trial_settings = m[MLTrialSettings][1]
+    if !trial_settings.use_ml && trial_settings.prev_model_npoints >= romeo_model.n_points
+        return
+    end
+    trial_settings.prev_model_npoints = romeo_model.n_points
+    trial_settings.use_ml = true
 
     n_new = 0
     max_tries = trial_settings.n_tries

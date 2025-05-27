@@ -188,20 +188,25 @@ s = load(Searcher("my_searcher_name"))
 """
 function RemoteHPC.load(l::Searcher; version = nothing)
     if version === nothing
-        versions = []
-        for d in readdir(l.rootdir)
-            !isdir(joinpath(l.rootdir, d)) ||
-                "ledger.jld2" ∉ readdir(joinpath(l.rootdir, d)) && continue
-
-            try
-                push!(versions, VersionNumber(d))
-            catch
-                nothing
-            end
-        end
-        version = maximum(versions)
+        version = check_ledger_version(l)
     end
     return load(joinpath(l.rootdir, string(version)), l)
+end
+
+function check_ledger_version(l)
+    rootdir = l.rootdir
+    versions = []
+    for d in readdir(rootdir)
+        !isdir(joinpath(rootdir, d)) ||
+            "ledger.jld2" ∉ readdir(joinpath(rootdir, d)) && continue
+        try
+            push!(versions, VersionNumber(d))
+        catch
+            nothing
+        end
+    end
+    version = maximum(versions)
+    return version
 end
 
 function RemoteHPC.load(rootdir::String, l::AbstractLedger)
@@ -209,7 +214,7 @@ function RemoteHPC.load(rootdir::String, l::AbstractLedger)
         if haskey(f, "version")
             return f["version"]
         else
-            return VersionNumber(0, 1)
+            return check_ledger_version(l)
         end
     end
 

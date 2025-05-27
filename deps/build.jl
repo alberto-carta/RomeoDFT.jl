@@ -1,6 +1,7 @@
 using Pkg
 using TOML
 using UUIDs
+
 const CONFIG_DIR = occursin("cache", first(Base.DEPOT_PATH)) ?
                    abspath(Base.DEPOT_PATH[2], "config", "RomeoDFT") :
                    abspath(Base.DEPOT_PATH[1], "config", "RomeoDFT")
@@ -20,7 +21,7 @@ if !haskey(ENV, "CI")
     Pkg.activate(CONFIG_DIR)
     Pkg.add(["Plots","LaTeXStrings","UnicodePlots","Revise"])
     if !haskey(Pkg.dependencies(), UUIDs.UUID("87c4fabc-abb4-4467-86a6-1748b5c259fe"))
-        Pkg.add(url="https://github.com/louisponet/RomeoDFT.jl")
+        Pkg.add(url="git@github.com:LyKex/RomeoDFT.jl.git")
     end
     Pkg.update()
 
@@ -30,6 +31,7 @@ if !haskey(ENV, "CI")
         RomeoDFT.comonicon_install()
     end
 end
+
 using RemoteHPC
 if !RemoteHPC.exists(Environment("default"))
     save(Environment(name="default"))

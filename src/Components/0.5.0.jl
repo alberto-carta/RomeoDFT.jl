@@ -119,7 +119,10 @@ end
     bands::Bool = false
 end
 
+@pooled_component Base.@kwdef struct RandomSearcher
+    nsearchers::Int=50
 end
+"Identifies whether a calculation and all its postprocessing steps are done."
 @component struct Done
     cleaned::Bool
 end
