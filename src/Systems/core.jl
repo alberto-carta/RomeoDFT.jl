@@ -195,7 +195,8 @@ function Overseer.update(::JobSubmitter, m::AbstractLedger)
         e.remote_dir = joinpath(server, m, e)
 
         for c in filter(x -> x.run, e.job.calculations)
-            if eltype(c) == QE
+            # if eltype(c) == QE
+            if eltype(c) == QE || eltype(c) == QE7_2
                 ex      = load(server, Exec(server_info.pw_exec))
                 ex.path = joinpath(dirname(ex.path), exec(c.exec))
                 c.exec  = ex
