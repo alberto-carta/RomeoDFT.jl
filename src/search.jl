@@ -353,25 +353,65 @@ function setup_scf(scf_file, supercell;
     @assert ispath(scf_file) ArgumentError("scf file not found")
 
     template = DFC.FileIO.qe_parse_calculation(scf_file)
+   
+    #WTF why the hell is it rewriting the executable path to be just pw.x
+    if template.package == QE
+      @info "Found legacy quantum espresso, appending everything to scf calculation"
+      calc                                = Calculation{QE}(; name = "scf", exec = Exec(; name = "pw", path = "pw.x"),
+      flags = template.flags, data = template.data)
+      calc[:system][:Hubbard_maxstep]     = Hubbard_maxstep
+      calc[:system][:Hubbard_mixing_beta] = Hubbard_mixing_beta
+      calc[:system][:Hubbard_strength]    = Hubbard_strength
+      calc[:system][:Hubbard_conv_thr]    = Hubbard_conv_thr
+      calc[:calculation]                  = "scf"
+      calc[:verbosity]                    = "high"
+      calc[:electron_maxstep]             = electron_maxstep
+      for (k, v) in kwargs
+          calc[k] = v
+      end
 
-    calc                                = Calculation{QE}(; name = "scf", exec = Exec(; name = "pw", path = "pw.x"),
-    flags = template.flags, data = template.data)
-    calc[:system][:Hubbard_maxstep]     = Hubbard_maxstep
-    calc[:system][:Hubbard_mixing_beta] = Hubbard_mixing_beta
-    calc[:system][:Hubbard_strength]    = Hubbard_strength
-    calc[:system][:Hubbard_conv_thr]    = Hubbard_conv_thr
-    calc[:calculation]                  = "scf"
-    calc[:verbosity]                    = "high"
-    calc[:electron_maxstep]             = electron_maxstep
-    for (k, v) in kwargs
-        calc[k] = v
+      if any(!isequal(1), supercell)
+          kpts = DFC.data(calc, :k_points).data
+          set_kpoints!(calc, (ceil.(Int, kpts[1:3] ./ supercell)..., kpts[4:6]...))
+      end
+      return calc
+    
+    
+    elseif template.package == QE7_2
+      @info "Found new quantum espresso DFT+U interface, creating OSCDFT instance"
+
+      placeholder_occupations = zeros(Float64, 1, 1, 1, 4)
+      params = Dict{Symbol, Any}(
+      :constraint_mixing_beta => Hubbard_mixing_beta,
+      :constraint_conv_thr    => Hubbard_conv_thr,
+      :constraint_maxstep     => Hubbard_maxstep,
+      :constraint_strength    => Hubbard_strength,
+      :oscdft_type            => 2,
+      :n_oscdft               => 100,
+      )
+      
+      additional_oscdft =  OSCDFT_Struct(params, placeholder_occupations, "oscdft.in")
+
+      calc                                = Calculation{QE7_2}(; name = "scf", exec = Exec(; name = "pw", path = "pw.x"),
+      flags = template.flags, data = template.data, additional_args = Dict("oscdft"=>additional_oscdft))
+      
+
+      calc[:calculation]                  = "scf"
+      calc[:verbosity]                    = "high"
+      calc[:electron_maxstep]             = electron_maxstep
+      for (k, v) in kwargs
+          calc[k] = v
+      end
+
+      if any(!isequal(1), supercell)
+          kpts = DFC.data(calc, :k_points).data
+          set_kpoints!(calc, (ceil.(Int, kpts[1:3] ./ supercell)..., kpts[4:6]...))
+      end
+      return calc
+    else
+        ArgumentError("QE Calculation type not found")
     end
 
-    if any(!isequal(1), supercell)
-        kpts = DFC.data(calc, :k_points).data
-        set_kpoints!(calc, (ceil.(Int, kpts[1:3] ./ supercell)..., kpts[4:6]...))
-    end
-    return calc
 end
 
 function setup_structure(structure_file, supercell, primitive; pseudoset=nothing, U_values=nothing, use_input_magnetization=false, kwargs...)
@@ -433,6 +473,7 @@ function setup_structure(structure_file, supercell, primitive; pseudoset=nothing
     sort!(str.atoms; by = x -> x.name in magatsyms ? 0 : typemax(Float64))
 
     @info "Structure that will be used:"
+    @info "Adding logs"
     display(str)
     return str
 end
@@ -459,9 +500,13 @@ function heuristic_search(l, calc, struc)
         for i in eachindex(config)
             structmp.atoms[i].magnetization = [0.0, 0.0, config[i] * 1e-5]
         end
+        tempcalc = deepcopy(calc)
+        # remove -oscdft flag for heuristic search
+        pop!(tempcalc.exec.flags, "-oscdft", nothing)
+
         push!(base_es, Entity(l,
             BaseCase(),
-            Template(structmp, deepcopy(calc)),
+            Template(structmp, tempcalc),
             Generation(1)))
     end
 
@@ -610,14 +655,20 @@ function setup_search(name, scf_file, structure_file = scf_file;
     else
         mkpath(dir)
     end
+    
 
     calc = setup_scf(scf_file, supercell; kwargs...)
     str = setup_structure(structure_file, supercell, primitive; use_input_magnetization=use_input_magnetization, kwargs...)
 
+    # WTF!?!? the exec is found later, but here you set it to `pw.x`
+
     magats = filter(ismagnetic, str.atoms)
-    suppress() do
-        return calc[:system][:Hubbard_conv_thr] *= length(magats)
-    end
+    
+    # this increases the convergence threshold if you have more than one magnetic atom, but we can avoid due to Iurii's recent 
+    # refactoring
+    #suppress() do
+    #    return calc[:system][:Hubbard_conv_thr] *= length(magats)
+    #end
 
     l = Searcher(; rootdir = dir, sleep_time = sleep_time)
 

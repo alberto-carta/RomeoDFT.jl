@@ -3,7 +3,7 @@ using ..Overseer
 using ..DFControl.Jobs
 using ..v0_1
 using ..RomeoDFT: State, DFWannier, MagneticVectorType, ColinMatrixType, PostProcessSettings, AbstractResults
-using ..RomeoDFT.DFControl: Projection, Calculation, QE, Structure
+using ..RomeoDFT.DFControl: Projection, Calculation, AbstractQE, QE, QE7_2,  Structure, OSCDFT_Struct
 
 """
     Results
@@ -140,7 +140,7 @@ Component that holds the template structure and calculation that will be used du
 """
 @pooled_component struct Template
     structure::Structure
-    calculation::Calculation{QE}
+    calculation::Calculation{P} where P <: AbstractQE
 end
 
 @component struct SCFSettings
