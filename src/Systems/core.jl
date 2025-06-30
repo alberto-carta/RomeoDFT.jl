@@ -45,8 +45,13 @@ function Overseer.update(::JobCreator, m::AbstractLedger)
             set_name!(scf_calc, "scf")
 
             if e in m[Trial]
-                scf_calc[:system][:Hubbard_occupations] = generate_Hubbard_occupations(m[Trial][e].state,
+                if typeof(scf_calc) == QE
+                    scf_calc[:system][:Hubbard_occupations] = generate_Hubbard_occupations(m[Trial][e].state,
                                                                                        e.structure)
+                elseif typeof(scf_calc) == QE7_2
+                    
+                end
+
             end
 
             # if e in m[Intersection]
@@ -200,6 +205,11 @@ function Overseer.update(::JobSubmitter, m::AbstractLedger)
                 ex      = load(server, Exec(server_info.pw_exec))
                 ex.path = joinpath(dirname(ex.path), exec(c.exec))
                 c.exec  = ex
+                # check if you are doing heurstic search, i.e. check for BaseCase
+                if e ∈ m[BaseCase]
+                    @info "Popping oscdft flag from heuristic search"
+                    pop!(c.exec.flags, "-oscdft", nothing)
+                end
 
             elseif eltype(c) == Wannier90
                 c.exec = load(server, Exec("wannier90"))

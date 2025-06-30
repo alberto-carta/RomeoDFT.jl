@@ -379,8 +379,12 @@ function setup_scf(scf_file, supercell;
     
     elseif template.package == QE7_2
       @info "Found new quantum espresso DFT+U interface, creating OSCDFT instance"
+      @info "Adding logging"
 
-      placeholder_occupations = zeros(Float64, 1, 1, 1, 4)
+      placeholder_occupations = [
+          zeros(Float64, 1, 1, 2), # Atom 1: [orb2_dim, orb1_dim, spin_dim]
+          zeros(Float64, 1, 1, 2)  # Atom 2: [orb2_dim, orb1_dim, spin_dim]
+      ]
       params = Dict{Symbol, Any}(
       :constraint_mixing_beta => Hubbard_mixing_beta,
       :constraint_conv_thr    => Hubbard_conv_thr,
