@@ -209,6 +209,37 @@ function generate_Hubbard_occupations(s::State, str::Structure)
 end
 
 """
+    generate_Hubbard_occupations_7_2(state)
+    new function for new quantum espresso interface
+"""
+function generate_Hubbard_occupations_7_2(hubstate::State)
+    nat = length(hubstate.occupations)
+    # Output is a vector of 3D tensors: [orb2_dim, orb1_dim, spin_dim]
+    Hubbard_occupations_vector = Vector{Array{Float64, 3}}(undef, nat)
+
+    for (ia, occ) in enumerate(hubstate.occupations)
+        # Determine orbital dimensions from the spin-up matrix
+        dim = size(occ[Up()], 1)
+        # Initialize 3D tensor for the atom in [orb2, orb1, spin] order
+        atom_tensor = zeros(Float64, dim, dim, 2)
+
+        for (is, s) in enumerate((Up(), Down()))
+            o = occ[s]
+            # Loop over orbital indices
+            for m1 in 1:dim, m2 in 1:dim
+                t = o[m1, m2]
+                # Map (orb1, orb2, spin) to tensor's (orb2, orb1, spin) structure
+                atom_tensor[m2, m1, is] = t == 0.0 ? 1e-5 : t
+            end
+        end
+        # Assign the filled tensor to the vector element for the current atom
+        Hubbard_occupations_vector[ia] = atom_tensor
+    end
+    return Hubbard_occupations_vector
+end
+
+
+"""
     starting_ns_eigenvalue(state)
 
 Generates the `:starting_ns_eigenvalue` entry for a constrained scf calculation.

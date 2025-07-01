@@ -45,11 +45,12 @@ function Overseer.update(::JobCreator, m::AbstractLedger)
             set_name!(scf_calc, "scf")
 
             if e in m[Trial]
-                if typeof(scf_calc) == QE
+                if eltype(scf_calc) == QE
                     scf_calc[:system][:Hubbard_occupations] = generate_Hubbard_occupations(m[Trial][e].state,
                                                                                        e.structure)
-                elseif typeof(scf_calc) == QE7_2
-                    
+                elseif eltype(scf_calc) == QE7_2
+                    # @info "using OSCDFT interface for Hubbard occupations"
+                    scf_calc.additional_args["oscdft"].occupation_numbers = generate_Hubbard_occupations_7_2(m[Trial][e].state)
                 end
 
             end
