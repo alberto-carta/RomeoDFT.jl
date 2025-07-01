@@ -68,7 +68,7 @@ include("CLI/cli.jl")
 include("logging.jl")
 
 export Searcher, connect_orchestrator
-export ground_state, unique_states
+export ground_state, unique_states, plot_states
 
 # @compile_workload begin
 #     tn = tempname()

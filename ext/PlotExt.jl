@@ -1,26 +1,22 @@
-Module PlotExt
+module PlotExt
 
+using RomeoDFT
+using RomeoDFT: BandsPlotter
+using RomeoDFT: ismagnetic, IntersectionMixed, Euclidean, sssp_distance
+using DFWannier
 using LaTeXStrings
 using Plots
-using RomeoDFT
+using Overseer
+using ThreadPools: @tspawnat
+
 
 gr()
 Plots.theme(:wong2)
 
 const E_conv_fac = 13.6056980659
-Plots.default(xguidefontsize         = 15,
-              yguidefontsize         = 15,
-              tickfontsize           = 10,
-              titlefontsize          = 15,
-              colorbar_tickfontsize  = 15,
-              colorbar_titlefontsize = 20,
-              titlefontvalign = :bottom,
-              framestyle = :box,
-              left_margin = 10Plots.mm,
-              bottom_margin= 8Plots.mm,
-              markersize=2)
 
-function plot_states(es::Vector, nat::Int, gs;
+
+function RomeoDFT.plot_states(es::Vector, nat::Int, gs;
                      include_hub_energy = true,
                      rel_energy = true,
                      fit = false,
@@ -106,9 +102,8 @@ function plot_states(es::Vector, nat::Int, gs;
     return p
 end
 
-# 
 
-function plot_states(tl::AbstractLedger; unique = false, relaxed = false, unique_thr = 0.1, kwargs...)
+function RomeoDFT.plot_states(tl::AbstractLedger; unique = false, relaxed = false, unique_thr = 0.1, kwargs...)
 
     str = tl[Template][1].structure
     nat = length(filter(ismagnetic, str.atoms))

@@ -208,7 +208,7 @@ function Overseer.update(::ResultsProcessor, m::AbstractLedger)
 end
 
 struct BandsPlotter <: System end
-Overseer.update(::BandsPlotter, ::AbstractLedger) = nothing
+# Overseer.update(::BandsPlotter, ::AbstractLedger) = nothing
 
 """
     UniqueExplorer
