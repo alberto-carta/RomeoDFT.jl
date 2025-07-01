@@ -81,13 +81,13 @@ export ground_state, unique_states
 #     isalive(local_server())
 # end
 
-using Requires
+# using Requires
 
-function __init__()
-    @require Plots="91a5bcdd-55d7-5caf-9e0b-520d859cae80" begin
-        @eval include("Systems/bandsplotter.jl")
-        @require LaTeXStrings="b964fa9f-0449-5b57-a5c2-d3ea65f4040f" @eval include("plotting.jl")
-    end
-end
+# function __init__()
+#     @require Plots="91a5bcdd-55d7-5caf-9e0b-520d859cae80" begin
+#         @eval include("Systems/bandsplotter.jl")
+#         @require LaTeXStrings="b964fa9f-0449-5b57-a5c2-d3ea65f4040f" @eval include("plotting.jl")
+#     end
+# end
 
 end # RomeoDFT
